@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 const http = require("http");
 
-const server = http.createServer((req, res) => {
+const server = http.createServer((req,res)=>{
   res.writeHead(200);
   res.end("OK");
 });
@@ -10,70 +10,69 @@ const wss = new WebSocket.Server({ server });
 
 let rooms = {};
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws)=>{
 
-  ws.send(JSON.stringify({ type: "ready" }));
+  ws.send(JSON.stringify({ type:"ready" }));
 
-  ws.on("message", (msg) => {
+  ws.on("message",(msg)=>{
 
     let d;
     try { d = JSON.parse(msg); } catch { return; }
 
-    if (d.type === "join") {
+    if(d.type === "join"){
 
       const room = d.room;
       ws.room = room;
 
-      if (!rooms[room]) rooms[room] = [];
+      if(!rooms[room]) rooms[room] = [];
 
-      // duplicate fix
-      if (!rooms[room].includes(ws))
-        rooms[room].push(ws);
+      rooms[room].push(ws);
 
-      sendState(room);
-
+      broadcastState(room);
       return;
     }
 
-    if (d.type === "peer_message") {
+    if(d.type === "input"){
 
       const room = ws.room;
-      if (!rooms[room]) return;
+      if(!rooms[room]) return;
 
-      rooms[room].forEach(c => {
-        if (c !== ws && c.readyState === WebSocket.OPEN) {
-          c.send(JSON.stringify(d));
+      rooms[room].forEach(c=>{
+        if(c !== ws && c.readyState === WebSocket.OPEN){
+          c.send(JSON.stringify({
+            type:"input",
+            id:d.id,
+            pos:d.pos
+          }));
         }
       });
+
+      return;
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close",()=>{
 
     const r = ws.room;
-    if (!rooms[r]) return;
+    if(!rooms[r]) return;
 
-    rooms[r] = rooms[r].filter(x => x !== ws);
+    rooms[r] = rooms[r].filter(x=>x!==ws);
 
-    sendState(r);
+    broadcastState(r);
   });
 });
 
-function sendState(room) {
-  if (!rooms[room]) return;
+function broadcastState(room){
 
-  // 🔥 CRITICAL FIX: ID LIST
-  const list = [];
+  if(!rooms[room]) return;
 
-  for (let i = 0; i < rooms[room].length; i++) {
-    list.push(i + 1);
-  }
+  const list = rooms[room].map((_,i)=>i+1);
 
-  rooms[room].forEach(ws => {
-    if (ws.readyState === WebSocket.OPEN) {
+  rooms[room].forEach(ws=>{
+    if(ws.readyState === WebSocket.OPEN){
       ws.send(JSON.stringify({
-        type: "room_state",
-        players: list
+        type:"state",
+        players:list
       }));
     }
   });
