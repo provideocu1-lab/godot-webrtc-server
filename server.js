@@ -1,76 +1,58 @@
 const WebSocket = require("ws");
-const http = require("http");
+const server = new WebSocket.Server({ port: 3000 });
 
-const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("OK");
-});
+let clients = [];
 
-const wss = new WebSocket.Server({ server });
+server.on("connection", (ws) => {
 
-let rooms = {};
-
-wss.on("connection", (ws) => {
-  ws.send(JSON.stringify({ type: "ready" }));
+  clients.push(ws);
 
   ws.on("message", (msg) => {
+
     let d;
     try { d = JSON.parse(msg); } catch { return; }
 
     if (d.type === "join") {
-      ws.room = d.room;
 
-      if (!rooms[d.room]) rooms[d.room] = [];
-      
-      // Godot'taki my_id mantığına (Host=1, Join=2) sadık kalmak için odaya giriş sırasına göre ID veriyoruz
-      if (rooms[d.room].length === 0) {
-        ws.customId = 1;
-      } else {
-        ws.customId = 2;
-      }
+      ws.id = clients.indexOf(ws) + 1;
 
-      rooms[d.room].push(ws);
-      broadcastState(d.room);
+      console.log("JOIN:", ws.id);
+
+      broadcastState();
       return;
     }
 
     if (d.type === "move") {
-      const r = ws.room;
-      if (!rooms[r]) return;
-
-      rooms[r].forEach((c) => {
-        if (c !== ws && c.readyState === WebSocket.OPEN) {
-          c.send(JSON.stringify(d));
-        }
-      });
+      broadcast(msg, ws);
     }
   });
 
   ws.on("close", () => {
-    const r = ws.room;
-    if (!rooms[r]) return;
-    rooms[r] = rooms[r].filter((x) => x !== ws);
-    broadcastState(r);
+    clients = clients.filter(c => c !== ws);
+    broadcastState();
   });
 });
 
-function broadcastState(room) {
-  if (!rooms[room]) return;
+function broadcastState() {
 
-  const list = rooms[room].map((ws) => ws.customId);
+  const ids = clients.map((_, i) => i + 1);
 
-  rooms[room].forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "state",
-          players: list,
-        })
-      );
+  for (const c of clients) {
+    if (c.readyState === WebSocket.OPEN) {
+      c.send(JSON.stringify({
+        type: "state",
+        players: ids
+      }));
     }
-  });
+  }
 }
 
-server.listen(3000, () => {
-  console.log("WebSocket sunucusu port 3000 üzerinde aktif.");
-});
+function broadcast(msg, sender) {
+  for (const c of clients) {
+    if (c !== sender && c.readyState === WebSocket.OPEN) {
+      c.send(msg);
+    }
+  }
+}
+
+console.log("SERVER RUNNING");
