@@ -2,8 +2,8 @@ const WebSocket = require("ws");
 const http = require("http");
 
 const server = http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end("OK");
+  res.writeHead(200);
+  res.end("OK");
 });
 
 const wss = new WebSocket.Server({ server });
@@ -12,70 +12,67 @@ let rooms = {};
 
 wss.on("connection", (ws) => {
 
-    ws.send(JSON.stringify({ type: "ready" }));
+  ws.send(JSON.stringify({ type: "ready" }));
 
-    ws.on("message", (msg) => {
+  ws.on("message", (msg) => {
 
-        let d;
-        try { d = JSON.parse(msg); } catch { return; }
+    let d;
+    try { d = JSON.parse(msg); } catch { return; }
 
-        // JOIN
-        if (d.type === "join") {
+    if (d.type === "join") {
 
-            const room = d.room;
-            ws.room = room;
+      const room = d.room;
+      ws.room = room;
 
-            if (!rooms[room]) rooms[room] = [];
+      if (!rooms[room]) rooms[room] = [];
 
-            rooms[room].push(ws);
+      if (!rooms[room].includes(ws))
+        rooms[room].push(ws);
 
-            console.log("JOIN:", room);
+      console.log("JOIN:", room);
 
-            // 🔥 HERKESE KENDİNİ VE ODA DURUMUNU GÖNDER
-            broadcast(room, {
-                type: "room_state",
-                players: rooms[room].length
-            });
+      sendState(room);
 
-            return;
+      return;
+    }
+
+    if (d.type === "peer_message") {
+
+      const room = ws.room;
+      if (!rooms[room]) return;
+
+      rooms[room].forEach(c => {
+        if (c !== ws && c.readyState === WebSocket.OPEN) {
+          c.send(JSON.stringify(d));
         }
+      });
+    }
+  });
 
-        // RELAY
-        if (d.type === "peer_message") {
+  ws.on("close", () => {
 
-            const room = ws.room;
-            if (!rooms[room]) return;
+    const r = ws.room;
+    if (!rooms[r]) return;
 
-            rooms[room].forEach(c => {
-                if (c !== ws && c.readyState === WebSocket.OPEN) {
-                    c.send(JSON.stringify(d));
-                }
-            });
-        }
-    });
+    rooms[r] = rooms[r].filter(x => x !== ws);
 
-    ws.on("close", () => {
-
-        const r = ws.room;
-        if (!rooms[r]) return;
-
-        rooms[r] = rooms[r].filter(x => x !== ws);
-
-        broadcast(r, {
-            type: "room_state",
-            players: rooms[r].length
-        });
-    });
+    sendState(r);
+  });
 });
 
-function broadcast(room, msg) {
-    if (!rooms[room]) return;
+function sendState(room) {
+  if (!rooms[room]) return;
 
-    rooms[room].forEach(c => {
-        if (c.readyState === WebSocket.OPEN) {
-            c.send(JSON.stringify(msg));
-        }
-    });
+  const count = rooms[room].length;
+
+  rooms[room].forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "room_state",
+        players: count
+      }));
+    }
+  });
 }
 
 server.listen(3000);
