@@ -21,23 +21,21 @@ wss.on("connection", (ws)=>{
 
     if(d.type === "join"){
 
-      const room = d.room;
-      ws.room = room;
+      ws.room = d.room;
 
-      if(!rooms[room]) rooms[room] = [];
-      if(!rooms[room].includes(ws))
-        rooms[room].push(ws);
+      if(!rooms[d.room]) rooms[d.room] = [];
+      rooms[d.room].push(ws);
 
-      sendState(room);
+      broadcastState(d.room);
       return;
     }
 
-    if(d.type === "input"){
+    if(d.type === "move"){
 
-      const room = ws.room;
-      if(!rooms[room]) return;
+      const r = ws.room;
+      if(!rooms[r]) return;
 
-      rooms[room].forEach(c=>{
+      rooms[r].forEach(c=>{
         if(c !== ws && c.readyState === WebSocket.OPEN){
           c.send(JSON.stringify(d));
         }
@@ -46,17 +44,14 @@ wss.on("connection", (ws)=>{
   });
 
   ws.on("close",()=>{
-
     const r = ws.room;
     if(!rooms[r]) return;
-
     rooms[r] = rooms[r].filter(x=>x!==ws);
-    sendState(r);
+    broadcastState(r);
   });
 });
 
-function sendState(room){
-
+function broadcastState(room){
   if(!rooms[room]) return;
 
   const list = rooms[room].map((_,i)=>i+1);
