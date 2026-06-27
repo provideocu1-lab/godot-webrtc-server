@@ -25,10 +25,10 @@ wss.on("connection", (ws)=>{
       ws.room = room;
 
       if(!rooms[room]) rooms[room] = [];
+      if(!rooms[room].includes(ws))
+        rooms[room].push(ws);
 
-      rooms[room].push(ws);
-
-      broadcastState(room);
+      sendState(room);
       return;
     }
 
@@ -39,15 +39,9 @@ wss.on("connection", (ws)=>{
 
       rooms[room].forEach(c=>{
         if(c !== ws && c.readyState === WebSocket.OPEN){
-          c.send(JSON.stringify({
-            type:"input",
-            id:d.id,
-            pos:d.pos
-          }));
+          c.send(JSON.stringify(d));
         }
       });
-
-      return;
     }
   });
 
@@ -57,12 +51,11 @@ wss.on("connection", (ws)=>{
     if(!rooms[r]) return;
 
     rooms[r] = rooms[r].filter(x=>x!==ws);
-
-    broadcastState(r);
+    sendState(r);
   });
 });
 
-function broadcastState(room){
+function sendState(room){
 
   if(!rooms[room]) return;
 
