@@ -1,58 +1,76 @@
 const WebSocket = require("ws");
-const server = new WebSocket.Server({ port: 3000 });
+const http = require("http");
 
-let clients = [];
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("OK");
+});
 
-server.on("connection", (ws) => {
+const wss = new WebSocket.Server({ server });
 
-  clients.push(ws);
+let rooms = {};
+
+wss.on("connection", (ws) => {
+  ws.send(JSON.stringify({ type: "ready" }));
 
   ws.on("message", (msg) => {
-
     let d;
     try { d = JSON.parse(msg); } catch { return; }
 
     if (d.type === "join") {
+      ws.room = d.room;
 
-      ws.id = clients.indexOf(ws) + 1;
+      if (!rooms[d.room]) rooms[d.room] = [];
 
-      console.log("JOIN:", ws.id);
+      // İlk giren oyuncu 1, sonraki giren oyuncu 2 ID'sini alsın
+      if (rooms[d.room].length === 0) {
+        ws.customId = 1;
+      } else {
+        ws.customId = 2;
+      }
 
-      broadcastState();
+      rooms[d.room].push(ws);
+      broadcastState(d.room);
       return;
     }
 
     if (d.type === "move") {
-      broadcast(msg, ws);
+      const r = ws.room;
+      if (!rooms[r]) return;
+
+      rooms[r].forEach((c) => {
+        if (c !== ws && c.readyState === WebSocket.OPEN) {
+          c.send(JSON.stringify(d));
+        }
+      });
     }
   });
 
   ws.on("close", () => {
-    clients = clients.filter(c => c !== ws);
-    broadcastState();
+    const r = ws.room;
+    if (!rooms[r]) return;
+    rooms[r] = rooms[r].filter((x) => x !== ws);
+    broadcastState(r);
   });
 });
 
-function broadcastState() {
+function broadcastState(room) {
+  if (!rooms[room]) return;
 
-  const ids = clients.map((_, i) => i + 1);
+  const list = rooms[room].map((ws) => ws.customId);
 
-  for (const c of clients) {
-    if (c.readyState === WebSocket.OPEN) {
-      c.send(JSON.stringify({
-        type: "state",
-        players: ids
-      }));
+  rooms[room].forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "state",
+          players: list,
+        })
+      );
     }
-  }
+  });
 }
 
-function broadcast(msg, sender) {
-  for (const c of clients) {
-    if (c !== sender && c.readyState === WebSocket.OPEN) {
-      c.send(msg);
-    }
-  }
-}
-
-console.log("SERVER RUNNING");
+server.listen(3000, () => {
+  console.log("Sunucu port 3000 üzerinde çalışıyor.");
+});
