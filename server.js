@@ -3,26 +3,30 @@ const http = require("http");
 
 const server = http.createServer((req, res) => {
   res.writeHead(200);
-  res.end("OK");
+  res.end("Sunucu Aktif");
 });
 
 const wss = new WebSocket.Server({ server });
-
 let rooms = {};
 
 wss.on("connection", (ws) => {
+  // Bağlantı kurulduğunda hazır olduğunu istemciye bildir
   ws.send(JSON.stringify({ type: "ready" }));
 
   ws.on("message", (msg) => {
     let d;
-    try { d = JSON.parse(msg); } catch { return; }
+    try {
+      d = JSON.parse(msg);
+    } catch (e) {
+      return;
+    }
 
     if (d.type === "join") {
       ws.room = d.room;
 
       if (!rooms[d.room]) rooms[d.room] = [];
 
-      // İlk giren oyuncu 1, sonraki giren oyuncu 2 ID'sini alsın
+      // İlk giren 1 (Host), ikinci giren 2 (Join) ID'sini alır
       if (rooms[d.room].length === 0) {
         ws.customId = 1;
       } else {
@@ -38,6 +42,7 @@ wss.on("connection", (ws) => {
       const r = ws.room;
       if (!rooms[r]) return;
 
+      // Pozisyon verisini odadaki diğer oyunculara dağıt
       rooms[r].forEach((c) => {
         if (c !== ws && c.readyState === WebSocket.OPEN) {
           c.send(JSON.stringify(d));
@@ -72,5 +77,5 @@ function broadcastState(room) {
 }
 
 server.listen(3000, () => {
-  console.log("Sunucu port 3000 üzerinde çalışıyor.");
+  console.log("WebSocket sunucusu port 3000 üzerinde başarıyla başlatıldı.");
 });
