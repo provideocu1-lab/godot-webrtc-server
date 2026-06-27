@@ -26,10 +26,9 @@ wss.on("connection", (ws) => {
 
       if (!rooms[room]) rooms[room] = [];
 
+      // duplicate fix
       if (!rooms[room].includes(ws))
         rooms[room].push(ws);
-
-      console.log("JOIN:", room);
 
       sendState(room);
 
@@ -63,13 +62,18 @@ wss.on("connection", (ws) => {
 function sendState(room) {
   if (!rooms[room]) return;
 
-  const count = rooms[room].length;
+  // 🔥 CRITICAL FIX: ID LIST
+  const list = [];
+
+  for (let i = 0; i < rooms[room].length; i++) {
+    list.push(i + 1);
+  }
 
   rooms[room].forEach(ws => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: "room_state",
-        players: count
+        players: list
       }));
     }
   });
