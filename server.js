@@ -19,24 +19,28 @@ wss.on("connection", (ws) => {
         let d;
         try { d = JSON.parse(msg); } catch { return; }
 
+        // JOIN
         if (d.type === "join") {
 
             const room = d.room;
             ws.room = room;
 
             if (!rooms[room]) rooms[room] = [];
+
             rooms[room].push(ws);
 
             console.log("JOIN:", room);
 
+            // 🔥 HERKESE KENDİNİ VE ODA DURUMUNU GÖNDER
             broadcast(room, {
-                type: "spawn",
-                count: rooms[room].length
+                type: "room_state",
+                players: rooms[room].length
             });
 
             return;
         }
 
+        // RELAY
         if (d.type === "peer_message") {
 
             const room = ws.room;
@@ -58,8 +62,8 @@ wss.on("connection", (ws) => {
         rooms[r] = rooms[r].filter(x => x !== ws);
 
         broadcast(r, {
-            type: "spawn",
-            count: rooms[r].length
+            type: "room_state",
+            players: rooms[r].length
         });
     });
 });
